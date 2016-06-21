@@ -107,7 +107,6 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
   BOOL _performingBatchUpdates;
   NSMutableArray *_batchUpdateBlocks;
   
-  BOOL _asyncDataFetchingEnabled;
   _ASCollectionViewNodeSizeInvalidationContext *_queuedNodeSizeInvalidationContext; // Main thread only
   BOOL _isDeallocating;
   
@@ -150,13 +149,9 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
     unsigned int asyncDataSourceNodeForItemAtIndexPath:1;
     unsigned int asyncDataSourceNodeBlockForItemAtIndexPath:1;
     unsigned int asyncDataSourceNumberOfSectionsInCollectionView:1;
-    unsigned int asyncDataSourceCollectionViewLockDataSource:1;
-    unsigned int asyncDataSourceCollectionViewUnlockDataSource:1;
     unsigned int asyncDataSourceCollectionViewConstrainedSizeForNodeAtIndexPath:1;
   } _asyncDataSourceFlags;
 }
-
-@property (atomic, assign) BOOL asyncDataSourceLocked;
 
 // Used only when ASCollectionView is created directly rather than through ASCollectionNode.
 // We create a node so that logic related to appearance, memory management, etc can be located there
@@ -226,7 +221,7 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
   _rangeController.delegate = self;
   _rangeController.layoutController = _layoutController;
   
-  _dataController = [[ASCollectionDataController alloc] initWithAsyncDataFetching:NO];
+  _dataController = [[ASCollectionDataController alloc] init];
   _dataController.delegate = _rangeController;
   _dataController.dataSource = self;
   _dataController.environmentDelegate = self;
@@ -234,9 +229,6 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
   _batchContext = [[ASBatchContext alloc] init];
   
   _leadingScreensForBatching = 2.0;
-  
-  _asyncDataFetchingEnabled = NO;
-  _asyncDataSourceLocked = NO;
   
   _performingBatchUpdates = NO;
   _batchUpdateBlocks = [NSMutableArray array];
@@ -370,9 +362,7 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
     _asyncDataSourceFlags.asyncDataSourceNodeForItemAtIndexPath = [_asyncDataSource respondsToSelector:@selector(collectionView:nodeForItemAtIndexPath:)];
     _asyncDataSourceFlags.asyncDataSourceNodeBlockForItemAtIndexPath = [_asyncDataSource respondsToSelector:@selector(collectionView:nodeBlockForItemAtIndexPath:)];
     _asyncDataSourceFlags.asyncDataSourceNumberOfSectionsInCollectionView = [_asyncDataSource respondsToSelector:@selector(numberOfSectionsInCollectionView:)];
-    _asyncDataSourceFlags.asyncDataSourceCollectionViewLockDataSource = [_asyncDataSource respondsToSelector:@selector(collectionViewLockDataSource:)];
-    _asyncDataSourceFlags.asyncDataSourceCollectionViewUnlockDataSource = [_asyncDataSource respondsToSelector:@selector(collectionViewUnlockDataSource:)];
-    _asyncDataSourceFlags.asyncDataSourceCollectionViewConstrainedSizeForNodeAtIndexPath = [_asyncDataSource respondsToSelector:@selector(collectionView:constrainedSizeForNodeAtIndexPath:)];;
+    _asyncDataSourceFlags.asyncDataSourceCollectionViewConstrainedSizeForNodeAtIndexPath = [_asyncDataSource respondsToSelector:@selector(collectionView:constrainedSizeForNodeAtIndexPath:)];
 
     // Data-source must implement collectionView:nodeForItemAtIndexPath: or collectionView:nodeBlockForItemAtIndexPath:
     ASDisplayNodeAssertTrue(_asyncDataSourceFlags.asyncDataSourceNodeBlockForItemAtIndexPath || _asyncDataSourceFlags.asyncDataSourceNodeForItemAtIndexPath);
@@ -929,26 +919,6 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
     return [_asyncDataSource numberOfSectionsInCollectionView:self];
   } else {
     return 1;
-  }
-}
-
-- (void)dataControllerLockDataSource
-{
-  ASDisplayNodeAssert(!self.asyncDataSourceLocked, @"The data source has already been locked");
-  
-  self.asyncDataSourceLocked = YES;
-  if (_asyncDataSourceFlags.asyncDataSourceCollectionViewLockDataSource) {
-    [_asyncDataSource collectionViewLockDataSource:self];
-  }
-}
-
-- (void)dataControllerUnlockDataSource
-{
-  ASDisplayNodeAssert(self.asyncDataSourceLocked, @"The data source has already been unlocked");
-  
-  self.asyncDataSourceLocked = NO;
-  if (_asyncDataSourceFlags.asyncDataSourceCollectionViewUnlockDataSource) {
-    [_asyncDataSource collectionViewUnlockDataSource:self];
   }
 }
 
